@@ -12,7 +12,7 @@ const shellMocks = vi.hoisted(() => {
 	const state = {
 		newSessionListener: undefined as (() => void) | undefined,
 		keyboardShortcutsListener: undefined as (() => void) | undefined,
-		quitConfirmListener: undefined as ((request: { keepsRunning: boolean }) => void) | undefined,
+		quitConfirmListener: undefined as ((request: { keepRunning: "background" | "detach" | null }) => void) | undefined,
 		newShellTerminalListener: undefined as (() => void) | undefined,
 		openSettingsListener: undefined as (() => void) | undefined,
 		previousSessionListener: undefined as (() => void) | undefined,
@@ -68,7 +68,7 @@ const shellMocks = vi.hoisted(() => {
 			state.keyboardShortcutsListener = listener;
 			return vi.fn();
 		}),
-		onQuitConfirmRequest: vi.fn((listener: (request: { keepsRunning: boolean }) => void) => {
+		onQuitConfirmRequest: vi.fn((listener: (request: { keepRunning: "background" | "detach" | null }) => void) => {
 			state.quitConfirmListener = listener;
 			return vi.fn();
 		}),
@@ -1137,35 +1137,46 @@ describe("shell quit confirm subscription", () => {
 
 		const listener = shellMocks.state.quitConfirmListener;
 		if (!listener) throw new Error("quit confirm listener was not registered");
-		act(() => listener({ keepsRunning: true }));
+		act(() => listener({ keepRunning: "detach" }));
 		fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
-		expect(shellMocks.resolveQuitConfirm).toHaveBeenLastCalledWith(false);
+		expect(shellMocks.resolveQuitConfirm).toHaveBeenLastCalledWith("cancel");
 		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Quit Orchestrator?" })).not.toBeInTheDocument());
 
-		act(() => listener({ keepsRunning: true }));
-		fireEvent.click(await screen.findByRole("button", { name: "Quit" }));
-		expect(shellMocks.resolveQuitConfirm).toHaveBeenLastCalledWith(true);
+		act(() => listener({ keepRunning: "detach" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Keep agents running" }));
+		expect(shellMocks.resolveQuitConfirm).toHaveBeenLastCalledWith("keep-running");
 		expect(shellMocks.resolveQuitConfirm).toHaveBeenCalledTimes(2);
 		expect(screen.getByTestId("daemon-startup-loader")).toBeInTheDocument();
 	});
 
-	it("opens the Quit AO? dialog on request and reports the answer to the main process", async () => {
+	it("opens the quit dialog on request and reports the choice to the main process", async () => {
 		await renderShell();
 
 		const listener = shellMocks.state.quitConfirmListener;
 		if (!listener) throw new Error("quit confirm listener was not registered");
-		act(() => listener({ keepsRunning: true }));
+		act(() => listener({ keepRunning: "background" }));
 		expect(
-			await screen.findByText("Orchestrator will keep running in the background. You can reopen it from the menu bar."),
+			await screen.findByText(
+				"Keep agents running closes the window and leaves Orchestrator in the menu bar, still supervising your agents. Quit completely stops all running agents.",
+			),
 		).toBeInTheDocument();
-		fireEvent.click(screen.getByRole("button", { name: "Quit" }));
-		expect(shellMocks.resolveQuitConfirm).toHaveBeenCalledExactlyOnceWith(true);
+		fireEvent.click(screen.getByRole("button", { name: "Quit completely" }));
+		expect(shellMocks.resolveQuitConfirm).toHaveBeenCalledExactlyOnceWith("quit");
 		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Quit Orchestrator?" })).not.toBeInTheDocument());
 
-		act(() => listener({ keepsRunning: false }));
-		expect(await screen.findByText("Are you sure you want to quit Orchestrator?")).toBeInTheDocument();
+		act(() => listener({ keepRunning: null }));
+		expect(await screen.findByText("Quitting stops all running agents.")).toBeInTheDocument();
 		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-		expect(shellMocks.resolveQuitConfirm).toHaveBeenLastCalledWith(false);
+		expect(shellMocks.resolveQuitConfirm).toHaveBeenLastCalledWith("cancel");
+	});
+
+	it("keeps one dialog open when the request repeats", async () => {
+		await renderShell();
+		const listener = shellMocks.state.quitConfirmListener;
+		if (!listener) throw new Error("quit confirm listener was not registered");
+		act(() => listener({ keepRunning: "detach" }));
+		act(() => listener({ keepRunning: "detach" }));
+		expect(await screen.findAllByRole("dialog", { name: "Quit Orchestrator?" })).toHaveLength(1);
 	});
 });
 

@@ -67,6 +67,18 @@ describe("ui-settings", () => {
 			locale: "ja",
 			soundNotificationsEnabled: false,
 			terminalShell: { kind: "git-bash" },
+			confirmBeforeQuit: true,
+		});
+	});
+
+	it("merges confirmBeforeQuit without resetting other UI settings", async () => {
+		await writeUiSettings(dir, { locale: "ja", soundNotificationsEnabled: false });
+		await writeUiSettings(dir, { confirmBeforeQuit: false });
+		expect(await readUiSettings(dir)).toEqual({
+			...DEFAULT_UI_SETTINGS,
+			locale: "ja",
+			soundNotificationsEnabled: false,
+			confirmBeforeQuit: false,
 		});
 	});
 

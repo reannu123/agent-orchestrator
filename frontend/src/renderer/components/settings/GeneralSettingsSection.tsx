@@ -6,6 +6,7 @@ import { THEMES, getThemeDefinition } from "../../lib/theme-palettes";
 import type { AppLocale } from "../../i18n";
 import { useLocaleStore } from "../../stores/locale-store";
 import { useSoundNotificationsStore } from "../../stores/sound-notifications-store";
+import { useConfirmBeforeQuitStore } from "../../stores/confirm-before-quit-store";
 import { useUiStore, type ChatSendKeyMode } from "../../stores/ui-store";
 import { useTelemetryPolicyStore } from "../../stores/telemetry-policy-store";
 import { useAnalyticsOptOutStore } from "../../stores/analytics-opt-out-store";
@@ -186,6 +187,41 @@ const WINDOWS_SHELL_KINDS = ["pwsh", "powershell", "cmd", "git-bash", "wsl"] as 
 const DETECTED_SHELL_PREFIX = "path:";
 
 type ShellOption = SettingsOption<string> & { path?: string };
+
+// Whether closing or quitting the desktop app asks what to do with running
+// agents first (main/quit-confirm.ts reads it from ui-settings.json).
+function ConfirmBeforeQuitRow() {
+	const { t } = useTranslation();
+	const enabled = useConfirmBeforeQuitStore((state) => state.enabled);
+	const load = useConfirmBeforeQuitStore((state) => state.load);
+	const setEnabled = useConfirmBeforeQuitStore((state) => state.setEnabled);
+	const saving = useConfirmBeforeQuitStore((state) => state.saving);
+	const saveError = useConfirmBeforeQuitStore((state) => state.saveError);
+	useEffect(() => {
+		void load();
+	}, [load]);
+	return (
+		<SettingsRow
+			label={t("settings.confirmBeforeQuit")}
+			description={
+				saveError ? (
+					<span role="alert" className="text-error">{t("settings.confirmBeforeQuit.saveFailed")}</span>
+				) : (
+					t("settings.confirmBeforeQuit.description")
+				)
+			}
+		>
+			<Switch
+				aria-label={t("settings.confirmBeforeQuit")}
+				checked={enabled}
+				disabled={saving}
+				onCheckedChange={(next) => {
+					void setEnabled(next);
+				}}
+			/>
+		</SettingsRow>
+	);
+}
 
 function TerminalShellRows() {
 	const { t } = useTranslation();
@@ -498,6 +534,7 @@ export function GeneralSettingsSection({
 						}}
 					/>
 				</SettingsRow>
+				<ConfirmBeforeQuitRow />
 			</SettingsSection>
 
 			<DefaultCloudSandboxSection />
