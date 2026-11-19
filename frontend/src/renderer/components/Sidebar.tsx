@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjectAvatars } from "../hooks/useProjectAvatars";
 import { paidPlanBadge, useCloudBilling } from "../hooks/useCloudBilling";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useRouterState } from "@tanstack/react-router";
 import {
@@ -141,6 +142,8 @@ import { menuFocusReturnTarget } from "./ui/menu-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { SharedProjectMark } from "./teams/SharedProjectMark";
 import { CloudMark } from "./CloudMark";
+import { AgentAvatar } from "./AgentAvatar";
+import { agentLabel } from "../lib/agent-options";
 import { ProjectIcon } from "./ProjectIcon";
 import { OrchestratorIcon } from "./icons";
 import { OrchestratorReplyIcon, orchestratorReplyLabel, ReplyBadge } from "./OrchestratorReplyIcon";
@@ -2751,6 +2754,48 @@ type SessionReorder = Pick<SortableRow, "isDragging" | "listeners" | "setActivat
 	dropTransitionDisabled: boolean;
 };
 
+// Who a row's agent is, beside its name: the harness it runs now (read from the
+// live session, so an agent switch updates it) and, for an orchestrator, its
+// role. A worker is the sidebar's default, so it carries no role mark. Both
+// marks sit grey at rest and take their colour on hover or when open, so the
+// sidebar's colour stays with working and with what needs the user.
+function identityMarkClass(active: boolean) {
+	return cn(
+		"inline-flex size-3 shrink-0 items-center justify-center",
+		active ? undefined : "opacity-60 grayscale group-hover/session-row:opacity-100 group-hover/session-row:grayscale-0",
+	);
+}
+
+function sessionRoleLabel(session: WorkspaceSession, t: TFunction): string {
+	return isOrchestratorSession(session) ? t("shell.sessionRole.orchestrator") : t("shell.sessionRole.worker");
+}
+
+const SessionIdentityMarks = memo(function SessionIdentityMarks({ session, active }: { session: WorkspaceSession; active: boolean }) {
+	const { t } = useTranslation();
+	return (
+		<span aria-hidden="true" className="flex shrink-0 items-center gap-1" data-session-identity="">
+			{isOrchestratorSession(session) ? (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<span className={cn(identityMarkClass(active), "text-muted-foreground")} data-session-role="orchestrator">
+							<OrchestratorIcon className="size-3" />
+						</span>
+					</TooltipTrigger>
+					<TooltipContent>{t("shell.sessionRole.orchestrator")}</TooltipContent>
+				</Tooltip>
+			) : null}
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<span className={identityMarkClass(active)} data-session-harness={session.provider}>
+						<AgentAvatar className="size-3" decorative provider={session.provider} />
+					</span>
+				</TooltipTrigger>
+				<TooltipContent>{agentLabel(session.provider)}</TooltipContent>
+			</Tooltip>
+		</span>
+	);
+});
+
 // One worker-session row. Reads as a link by default; double-click/double-tap
 // on the name or F2 flips the label into an inline input (Enter/blur saves,
 // Escape cancels) that persists through the daemon rename endpoint.
@@ -2931,7 +2976,7 @@ const SessionRow = memo(function SessionRow({
 							aria-current={active ? "page" : undefined}
 							data-testid={session.hostId ? "remote-session-row" : undefined}
 							aria-keyshortcuts="F2"
-							aria-label={t("shell.openSession", { title: [session.title, hostLabel, cloud ? t("shell.cloudProjectBadge") : undefined].filter(Boolean).join(" · ") })}
+							aria-label={t("shell.openSession", { title: [session.title, sessionRoleLabel(session, t), agentLabel(session.provider), hostLabel, cloud ? t("shell.cloudProjectBadge") : undefined].filter(Boolean).join(" · ") })}
 							className={cn(
 								"flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg py-0 pl-1.5 text-left text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring",
 								(session.lastInteractionAt ?? session.lastUserMessageAt) ? "pr-[36px]" : "pr-2.5",
@@ -2999,6 +3044,7 @@ const SessionRow = memo(function SessionRow({
 									{session.title}
 									{shimmer ? <span aria-hidden="true" className="sidebar-working-shimmer"><span><span>{session.title}</span></span></span> : null}
 								</span>
+								<SessionIdentityMarks active={active} session={session} />
 								{hostLabel ? <Badge variant="outline" className="h-4 min-w-0 max-w-1/2 shrink justify-start px-1.5 text-2xs"><span className="truncate">{hostLabel}</span></Badge> : null}
 								{cloud ? <CloudMark /> : null}
 							</span>

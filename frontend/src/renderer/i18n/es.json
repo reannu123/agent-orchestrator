@@ -2246,6 +2246,8 @@
 	"shell.couldNotRemoveProjectNamed": "No se pudo eliminar {{name}}",
 	"shell.removeProjectRetry": "Reintentar",
 	"shell.renameSession": "Renombrar {{title}}",
+	"shell.sessionRole.worker": "Worker",
+	"shell.sessionRole.orchestrator": "Orquestador",
 	"shell.rename": "Renombrar",
 	"shell.openDashboard": "Abrir panel",
 	"shell.copied": "Copiado al portapapeles",

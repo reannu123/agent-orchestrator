@@ -92,7 +92,7 @@ describe("Sidebar session rows with the real DndContext", () => {
 	it("starts a keyboard drag on Space and cancels on Escape without opening the session", async () => {
 		const user = userEvent.setup();
 		renderSidebar();
-		const row = screen.getByLabelText("Open fix login");
+		const row = screen.getByLabelText("Open fix login · Worker · Claude Code");
 		row.focus();
 		await user.keyboard(" ");
 		await waitFor(() => expect(screen.getAllByRole("status").some((el) => /fix login|proj-1-1/.test(el.textContent ?? ""))).toBe(true));
@@ -104,7 +104,7 @@ describe("Sidebar session rows with the real DndContext", () => {
 	it("leaves Enter to open the row and F2 to rename it", async () => {
 		const user = userEvent.setup();
 		renderSidebar();
-		const row = screen.getByLabelText("Open fix login");
+		const row = screen.getByLabelText("Open fix login · Worker · Claude Code");
 		row.focus();
 		await user.keyboard("{Enter}");
 		expect(navigateMock).toHaveBeenCalledTimes(1);

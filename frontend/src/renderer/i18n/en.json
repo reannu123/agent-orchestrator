@@ -2595,6 +2595,8 @@
 	"shell.couldNotRemoveProjectNamed": "Could not remove {{name}}",
 	"shell.removeProjectRetry": "Retry",
 	"shell.renameSession": "Rename {{title}}",
+	"shell.sessionRole.worker": "Worker",
+	"shell.sessionRole.orchestrator": "Orchestrator",
 	"shell.rename": "Rename",
 	"shell.openDashboard": "Open dashboard",
 	"shell.copied": "Copied to clipboard",

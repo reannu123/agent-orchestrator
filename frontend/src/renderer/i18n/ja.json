@@ -2211,6 +2211,8 @@
 	"shell.couldNotRemoveProjectNamed": "{{name}} を削除できませんでした",
 	"shell.removeProjectRetry": "再試行",
 	"shell.renameSession": "{{title}} の名前を変更",
+	"shell.sessionRole.worker": "ワーカー",
+	"shell.sessionRole.orchestrator": "オーケストレーター",
 	"shell.rename": "名前を変更",
 	"shell.openDashboard": "ダッシュボードを開く",
 	"shell.copied": "クリップボードにコピーしました",
