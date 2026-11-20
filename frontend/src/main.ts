@@ -1305,10 +1305,7 @@ async function createWindowInternal(): Promise<void> {
 		}
 		if (chatDraftRisks.length > 0) chatDraftWindowCloseConfirmed = true;
 	});
-	// Windows logoff/shutdown: let the session end without a quit dialog.
-	mainWindow.on("query-session-end", () => {
-		osSessionEnding = true;
-	});
+	// Bypass the quit dialog once Windows commits to logoff or shutdown.
 	mainWindow.on("session-end", () => {
 		osSessionEnding = true;
 	});
@@ -1468,6 +1465,8 @@ async function createWindowInternal(): Promise<void> {
 		dictation.stop();
 	});
 	shellWebContents.on("render-process-gone", () => {
+		quitConfirmShellReady = false;
+		quitConfirm.reset();
 		keybindingRecordingActive = false;
 		terminalFocused = false;
 		terminalFontSizeFocused = false;
