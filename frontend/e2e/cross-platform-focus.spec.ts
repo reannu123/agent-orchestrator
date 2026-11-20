@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installFakeAgent } from "./support/fake-bridge";
 import { installFakeTerminalMux } from "./support/fake-terminal-mux";
+import { sidebarSessionButton } from "./support/sidebar-session";
 
 // The focus fixes are renderer-only and Electron ships the same Chromium on
 // every desktop platform, but two things branch on the platform: the command
@@ -81,7 +82,7 @@ for (const platform of PLATFORMS) {
 		await terminalHarness(page, platform);
 		await expect.poll(() => caretIsInTheVisibleTerminal(page)).toBe(true);
 
-		await page.getByRole("button", { name: `Open ${sessionB.title}`, exact: true }).click();
+		await sidebarSessionButton(page, sessionB.title).click();
 		await expect(visibleTerminal(page)).toHaveCount(1);
 		await expect.poll(() => caretIsInTheVisibleTerminal(page)).toBe(true);
 		await page.keyboard.type("bbb");
@@ -122,7 +123,7 @@ test("renderer: a focused terminal keeps plain Ctrl+K off macOS @T0", async ({ p
 	await expect(page.getByRole("dialog", { name: "Command palette" })).toHaveCount(0);
 
 	// The palette is still reachable once focus is out of the terminal.
-	await page.getByRole("button", { name: `Open ${sessionB.title}`, exact: true }).focus();
+	await sidebarSessionButton(page, sessionB.title).focus();
 	await page.keyboard.press("Control+k");
 	await expect(page.getByRole("dialog", { name: "Command palette" })).toHaveCount(1);
 });

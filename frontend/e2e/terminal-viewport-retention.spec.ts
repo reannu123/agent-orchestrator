@@ -4,6 +4,7 @@ import {
 	installFakeTerminalMux,
 	type FakeTerminalMuxStats,
 } from "./support/fake-terminal-mux";
+import { sidebarSessionButton } from "./support/sidebar-session";
 
 const sessionA = {
 	id: "viewport-a",
@@ -170,7 +171,7 @@ async function settledRevealSamples(page: Page): Promise<RevealSample[]> {
 }
 
 async function openSession(page: Page, title: string): Promise<void> {
-	await page.getByRole("button", { name: `Open ${title}`, exact: true }).click();
+	await sidebarSessionButton(page, title).click();
 	await expect(activeTerminal(page)).toBeVisible();
 	await expect(
 		page

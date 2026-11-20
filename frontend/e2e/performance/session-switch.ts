@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { installFakeAgent } from "../support/fake-bridge";
+import { sidebarSessionButton } from "../support/sidebar-session";
 
 const paths = Array.from({ length: 6000 }, (_, i) => `src/feature${i}/file${i}.ts`);
 const workers = Array.from({ length: 10 }, (_, i) => ({
@@ -45,9 +46,7 @@ export async function installSessionSwitchFixture(page: Page) {
 
 /** Click dispatch to the task after rAF with exact destination content and links. */
 export async function measureSessionSwitch(page: Page, id: number) {
-	return page.evaluate(async (id) => {
-		const button = document.querySelector<HTMLButtonElement>(`button[aria-label="Open Bench ${id}"]`);
-		if (!button) throw new Error(`Missing sidebar session ${id}`);
+	return sidebarSessionButton(page, `Bench ${id}`).evaluate(async (button: HTMLButtonElement, id) => {
 		const started = performance.now();
 		button.click();
 		await new Promise<void>((resolve, reject) => {
