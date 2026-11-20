@@ -1166,9 +1166,10 @@ async function createWindowInternal(): Promise<void> {
 		quitConfirm.reset();
 		applyAppMenuAvailability({});
 	});
-	// A reload drops any open quit dialog, so the next quit should ask again,
-	// once the reloaded shell subscribes.
-	shellWebContents.on("did-start-loading", () => {
+	// Reset only when the shell document is replaced. Child frames and SPA
+	// navigation leave the quit dialog subscription mounted.
+	shellWebContents.on("did-start-navigation", ({ isMainFrame, isSameDocument }) => {
+		if (!isMainFrame || isSameDocument) return;
 		quitConfirmShellReady = false;
 		quitConfirm.reset();
 	});
