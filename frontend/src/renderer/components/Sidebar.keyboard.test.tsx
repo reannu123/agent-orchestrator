@@ -112,4 +112,20 @@ describe("Sidebar session rows with the real DndContext", () => {
 		await user.keyboard("{F2}");
 		expect(screen.getByLabelText("Rename fix login")).toHaveFocus();
 	});
+
+	it("opens the inline editor on F2 when the Rename action has keyboard focus", async () => {
+		const user = userEvent.setup();
+		renderSidebar();
+		const row = screen.getByRole("button", { name: "Open fix login · Worker · Claude Code" });
+		const rename = screen.getByRole("button", { name: "Rename fix login" });
+		row.focus();
+		await user.tab();
+		expect(rename).toHaveFocus();
+		expect(rename).toHaveAttribute("aria-keyshortcuts", "F2");
+
+		await user.keyboard("{F2}");
+
+		expect(screen.getByRole("textbox", { name: "Rename fix login" })).toHaveFocus();
+		expect(navigateMock).not.toHaveBeenCalled();
+	});
 });

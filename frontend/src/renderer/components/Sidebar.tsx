@@ -3182,6 +3182,12 @@ const SessionActions = memo(function SessionActions({
 									event.stopPropagation();
 									onRename();
 								}}
+								onKeyDown={(event) => {
+									if (event.key !== "F2") return;
+									event.preventDefault();
+									event.stopPropagation();
+									onRename();
+								}}
 								type="button"
 							>
 								<Pencil aria-hidden="true" />
