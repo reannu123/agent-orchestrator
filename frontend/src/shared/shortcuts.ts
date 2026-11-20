@@ -483,12 +483,32 @@ export const APP_MENU_ACTION_CHANNEL = "app:menu-action";
 // renderer can all reference one constant without crossing bundle boundaries.
 export const NEW_SESSION_SHORTCUT_CHANNEL = "app:new-session";
 export const KEYBOARD_SHORTCUTS_HELP_CHANNEL = "app:keyboard-shortcuts-help";
-// ⌘Q on macOS: main asks the shell to show the quit confirm, and the shell
-// answers on the result channel with true (quit) or false (cancelled).
+// Quitting (⌘Q, the app menu, the tray, or closing the last window on
+// Windows/Linux): main asks the shell to show the quit confirm, and the shell
+// answers on the result channel with the chosen QuitConfirmChoice.
 export const QUIT_CONFIRM_REQUEST_CHANNEL = "app:quit-confirm-request";
-/** keepsRunning: quitting only closes the window; AO stays in the menu bar. */
-export type QuitConfirmRequest = { keepsRunning: boolean };
+/**
+ * How "Keep agents running" works where it is offered:
+ * - background: the window closes and AO stays in the menu bar (macOS tray).
+ * - detach: the app quits but leaves agents running for the next launch to
+ *   adopt; supervision pauses until AO is reopened.
+ */
+export type QuitKeepRunningMode = "background" | "detach";
+/** keepRunning: null when only Cancel and Quit are offered. */
+export type QuitConfirmRequest = { keepRunning: QuitKeepRunningMode | null };
+export type QuitConfirmChoice = "cancel" | "quit" | "keep-running";
 export const QUIT_CONFIRM_RESULT_CHANNEL = "app:quit-confirm-result";
+/** The shell subscribed to quit requests, so main can show the dialog in it. */
+export const QUIT_CONFIRM_READY_CHANNEL = "app:quit-confirm-ready";
+
+export function isQuitConfirmChoice(value: unknown): value is QuitConfirmChoice {
+	return value === "cancel" || value === "quit" || value === "keep-running";
+}
+
+export function coerceQuitConfirmRequest(raw: unknown): QuitConfirmRequest {
+	const mode = typeof raw === "object" && raw !== null ? (raw as { keepRunning?: unknown }).keepRunning : null;
+	return { keepRunning: mode === "background" || mode === "detach" ? mode : null };
+}
 export const NEW_SHELL_TERMINAL_SHORTCUT_CHANNEL = "app:new-shell-terminal";
 export const CLOSE_SHELL_TERMINAL_SHORTCUT_CHANNEL = "app:close-shell-terminal";
 export const OPEN_SETTINGS_SHORTCUT_CHANNEL = "app:open-settings";

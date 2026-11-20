@@ -115,6 +115,8 @@ import {
 	OPEN_SETTINGS_SHORTCUT_CHANNEL,
 	QUIT_CONFIRM_REQUEST_CHANNEL,
 	QUIT_CONFIRM_RESULT_CHANNEL,
+	QUIT_CONFIRM_READY_CHANNEL,
+	isQuitConfirmChoice,
 	type QuitConfirmRequest,
 	SET_CLOSE_SHELL_TERMINAL_SHORTCUT_ENABLED_CHANNEL,
 	SET_TERMINAL_FOCUSED_CHANNEL,
@@ -498,24 +500,54 @@ const desktopQuit = createDesktopQuitController({
 	hideDock: () => app.dock?.hide(),
 	quit: () => app.quit(),
 });
-// macOS app menu Quit. ⌘Q asks the shell to confirm; with no visible window
-// there is nowhere to show the dialog, so the shortcut quits directly.
+// Live mirror of the persisted `confirmBeforeQuit` UI setting (default on), kept
+// in sync by the uiSettings:set handler so the quit paths can read it at once.
+let confirmBeforeQuit = DEFAULT_UI_SETTINGS.confirmBeforeQuit;
+// The shell has subscribed to quit requests since it last loaded, so a request
+// sent now reaches a mounted dialog.
+let quitConfirmShellReady = false;
+// A quit is under way (before-quit ran and was not canceled): closing windows is
+// part of it, so the window-close confirmation stands aside.
+let appQuitInProgress = false;
+// The OS is shutting down or logging out: never hold it up with a dialog.
+let osSessionEnding = false;
+// Asks before quitting when "Confirm before quitting" is on: the macOS app menu
+// (mouse or ⌘Q), the menu bar icon, and closing the window on Windows/Linux.
 const quitConfirm = createQuitConfirmController({
+	platform: process.platform,
+	isEnabled: () => confirmBeforeQuit,
+	isBypassed: () => appQuitInProgress || osSessionEnding || isUpdateRestartRequested() || browserQuitRequested,
 	canConfirm: () => {
 		const shell = getShellWebContents();
-		return Boolean(mainWindow?.isVisible() && !mainWindow.isMinimized() && shell && !shell.isDestroyed());
+		return Boolean(quitConfirmShellReady && mainWindow?.isVisible() && !mainWindow.isMinimized() && shell && !shell.isDestroyed());
 	},
-	requestConfirm: () => {
+	canConfirmWindowClose: () => {
 		const shell = getShellWebContents();
+		return Boolean(mainWindow && shell && !shell.isDestroyed() && quitConfirmShellReady);
+	},
+	// Mirrors desktopQuit.handleBeforeQuit: with the tray up, quitting only
+	// closes the window, so the dialog can offer that.
+	hasTray: () => trayController !== null && !browserQuitRequested && !isUpdateRestartRequested(),
+	requestConfirm: (request: QuitConfirmRequest) => {
+		const shell = getShellWebContents();
+		if (mainWindow?.isMinimized()) mainWindow.restore();
+		if (mainWindow && !mainWindow.isVisible()) mainWindow.show();
+		mainWindow?.focus();
 		shell?.focus();
-		// Mirrors desktopQuit.handleBeforeQuit: with the tray up, quitting only
-		// closes the window, and the dialog says so.
-		const request: QuitConfirmRequest = {
-			keepsRunning: trayController !== null && !browserQuitRequested && !isUpdateRestartRequested(),
-		};
 		shell?.send(QUIT_CONFIRM_REQUEST_CHANNEL, request);
 	},
 	quit: () => app.quit(),
+	quitCompletely: () => {
+		preserveAgentsOnQuit = false;
+		desktopQuit.quitCompletely();
+	},
+	// Windows/Linux "Keep agents running": quit the app the way an update
+	// relaunch does, leaving agents for the next launch to adopt.
+	quitKeepingAgents: () => {
+		lifecycleLog("quit_keeping_agents");
+		preserveAgentsOnQuit = true;
+		desktopQuit.quitCompletely();
+	},
 });
 let browserRuntimeLink: BrowserRuntimeLinkHandle | null = null;
 let browserRuntimeLinkIdentity: BrowserRuntimeIdentity | null = null;
@@ -1130,11 +1162,17 @@ async function createWindowInternal(): Promise<void> {
 	relayScrollPhases(shellWebContents);
 	shellWebContents.once("destroyed", () => {
 		trustedShellWebContents.delete(shellWebContents.id);
+		quitConfirmShellReady = false;
 		quitConfirm.reset();
 		applyAppMenuAvailability({});
 	});
-	// A reload drops any open quit dialog, so the next ⌘Q should ask again.
-	shellWebContents.on("did-start-loading", () => quitConfirm.reset());
+	// Reset only when the shell document is replaced. Child frames and SPA
+	// navigation leave the quit dialog subscription mounted.
+	shellWebContents.on("did-start-navigation", ({ isMainFrame, isSameDocument }) => {
+		if (!isMainFrame || isSameDocument) return;
+		quitConfirmShellReady = false;
+		quitConfirm.reset();
+	});
 	// did-navigate is main-frame only, so an artifact iframe loading cannot clear this.
 	// The reloaded renderer reports availability again.
 	shellWebContents.on("did-navigate", () => applyAppMenuAvailability({}));
@@ -1242,10 +1280,17 @@ async function createWindowInternal(): Promise<void> {
 		}
 		// Doing nothing honors the renderer's request to stay, so a quit's close
 		// did not happen and AO keeps its Dock icon.
+		appQuitInProgress = false;
 		desktopQuit.windowCloseCanceled();
 	});
 
 	mainWindow.on("close", (event) => {
+		// Windows/Linux: closing the window quits the app, so ask first. The
+		// draft guard runs only once the user chose to quit (before-quit).
+		if (quitConfirm.windowClose()) {
+			event.preventDefault();
+			return;
+		}
 		const preventClose = shouldPreventUnsafeChatDraftClose(
 			chatDraftRisks,
 			chatDraftQuitConfirmed || chatDraftWindowCloseConfirmed,
@@ -1253,11 +1298,16 @@ async function createWindowInternal(): Promise<void> {
 			chatDraftDialog,
 		);
 		if (preventClose) {
+			appQuitInProgress = false;
 			desktopQuit.windowCloseCanceled();
 			event.preventDefault();
 			return;
 		}
 		if (chatDraftRisks.length > 0) chatDraftWindowCloseConfirmed = true;
+	});
+	// Bypass the quit dialog once Windows commits to logoff or shutdown.
+	mainWindow.on("session-end", () => {
+		osSessionEnding = true;
 	});
 
 	// Application shortcuts are handled here so they fire no matter which web
@@ -1415,6 +1465,8 @@ async function createWindowInternal(): Promise<void> {
 		dictation.stop();
 	});
 	shellWebContents.on("render-process-gone", () => {
+		quitConfirmShellReady = false;
+		quitConfirm.reset();
 		keybindingRecordingActive = false;
 		terminalFocused = false;
 		terminalFontSizeFocused = false;
@@ -3500,9 +3552,14 @@ ipcMain.on(SET_APP_MENU_AVAILABILITY_CHANNEL, (event, availability: unknown) => 
 	applyAppMenuAvailability(coerceAppMenuAvailability(availability));
 });
 
-ipcMain.on(QUIT_CONFIRM_RESULT_CHANNEL, (event, confirmed: unknown) => {
-	if (event.sender !== getShellWebContents() || typeof confirmed !== "boolean") return;
-	quitConfirm.resolve(confirmed);
+ipcMain.on(QUIT_CONFIRM_RESULT_CHANNEL, (event, choice: unknown) => {
+	if (event.sender !== getShellWebContents() || !isQuitConfirmChoice(choice)) return;
+	quitConfirm.resolve(choice);
+});
+
+ipcMain.on(QUIT_CONFIRM_READY_CHANNEL, (event) => {
+	if (event.sender !== getShellWebContents()) return;
+	quitConfirmShellReady = true;
 });
 
 ipcMain.on(SET_TERMINAL_FOCUSED_CHANNEL, (event, focused: unknown, handlesFontSize: unknown) => {
@@ -4052,6 +4109,7 @@ ipcMain.handle("uiSettings:get", async (): Promise<UiSettings> => {
 	const result = !runFile ? coerceUiSettings(settings) : await writeUiSettings(path.dirname(runFile), settings);
 	trayController?.setLocale(result.locale);
 	soundNotificationsEnabled = result.soundNotificationsEnabled;
+	confirmBeforeQuit = result.confirmBeforeQuit;
 	terminalShellPreference = result.terminalShell;
 	shellEnvPromise = null;
 	cachedShellEnv = null;
@@ -4817,13 +4875,14 @@ app.whenReady().then(async () => {
 		? await readUiSettings(path.dirname(keybindingRunFile))
 		: { ...DEFAULT_UI_SETTINGS };
 	soundNotificationsEnabled = initialUiSettings.soundNotificationsEnabled;
+	confirmBeforeQuit = initialUiSettings.confirmBeforeQuit;
 	terminalShellPreference = initialUiSettings.terminalShell;
 	if (browserQuitRequested) return;
 	if (isTrayEnabled(process.platform)) {
 		trayController = createTrayController({
 			focusWindow: focusMainWindow,
 			openSession: trayLifecycle.openSession,
-			quitCompletely: desktopQuit.quitCompletely,
+			quitCompletely: quitConfirm.trayQuit,
 			locale: initialUiSettings.locale,
 		});
 	}
@@ -4836,7 +4895,16 @@ app.whenReady().then(async () => {
 		app.once("will-quit", () => awakeTray.dispose());
 	}
 	if (process.platform === "darwin") {
-		powerMonitor.on("shutdown", () => desktopQuit.quitCompletely());
+		powerMonitor.on("shutdown", () => {
+			osSessionEnding = true;
+			desktopQuit.quitCompletely();
+		});
+	} else if (process.platform === "linux") {
+		// Only marks the shutdown so no quit dialog holds it up; without
+		// preventDefault this leaves the shutdown itself unchanged.
+		powerMonitor.on("shutdown", () => {
+			osSessionEnding = true;
+		});
 	}
 	// Boot the daemon alongside the window, not after it: the board cannot show
 	// until the daemon answers. createWindow links the browser runtime itself
@@ -4896,6 +4964,10 @@ setUpdateRestartFailureHandler(() => {
 let updateQuitDeadlineArmed = false;
 app.on("before-quit", (event) => {
 	if (desktopQuit.handleBeforeQuit(event)) return;
+	// From here this is a real quit: its window closes must not ask again, and
+	// a quit dialog still open (a quit from elsewhere) is superseded.
+	appQuitInProgress = true;
+	quitConfirm.reset();
 	if (chatDraftRisks.length > 0 && !chatDraftQuitConfirmed) {
 		event.preventDefault();
 		if (confirmUnsafeChatDraftLeave(
@@ -4907,6 +4979,7 @@ app.on("before-quit", (event) => {
 			app.quit();
 		} else {
 			preserveAgentsOnQuit = false;
+			appQuitInProgress = false;
 			clearUpdateRestartRequest();
 			desktopQuit.cancelQuit();
 		}

@@ -8,6 +8,7 @@ import { newChatDraftScope, readChatSessionDraft } from "../lib/chat-drafts";
 import { REPORT_PROBLEM_PROMPT } from "../lib/report-problem";
 import { useLocaleStore } from "../stores/locale-store";
 import { useSoundNotificationsStore } from "../stores/sound-notifications-store";
+import { useConfirmBeforeQuitStore } from "../stores/confirm-before-quit-store";
 import { useTerminalShellStore } from "../stores/terminal-shell-store";
 import { useUiStore } from "../stores/ui-store";
 import { useTelemetryPolicyStore } from "../stores/telemetry-policy-store";
@@ -251,6 +252,7 @@ beforeEach(async () => {
 	await appI18n.changeLanguage("en");
 	useLocaleStore.setState({ locale: "en", loaded: false, saving: false, saveError: false });
 	useSoundNotificationsStore.setState({ enabled: true, loaded: false, saving: false, saveError: false });
+	useConfirmBeforeQuitStore.setState({ enabled: true, loaded: false, saving: false, saveError: false });
 	useTerminalShellStore.setState({
 		preference: { kind: "auto" },
 		loaded: false,
@@ -467,6 +469,33 @@ describe("GlobalSettingsForm", () => {
 		await user.click(toggle);
 
 		await waitFor(() => expect(setUiSettings).toHaveBeenCalledWith({ soundNotificationsEnabled: false }));
+		expect(toggle).not.toBeChecked();
+	});
+
+	it("loads confirm before quitting (on by default) and persists turning it off", async () => {
+		const user = userEvent.setup();
+		renderForm();
+		const toggle = await screen.findByRole("switch", { name: "Confirm before quitting" });
+		expect(toggle).toBeChecked();
+		expect(screen.getByText("Ask whether to keep agents running when you close or quit Orchestrator.")).toBeInTheDocument();
+
+		await user.click(toggle);
+
+		await waitFor(() => expect(setUiSettings).toHaveBeenCalledWith({ confirmBeforeQuit: false }));
+		expect(toggle).not.toBeChecked();
+	});
+
+	it("shows confirm before quitting off when it was saved off, and reports a save failure", async () => {
+		getUiSettings.mockResolvedValue({ locale: "en", soundNotificationsEnabled: true, terminalShell: { kind: "auto" }, confirmBeforeQuit: false });
+		setUiSettings.mockRejectedValue(new Error("disk full"));
+		const user = userEvent.setup();
+		renderForm();
+		const toggle = await screen.findByRole("switch", { name: "Confirm before quitting" });
+		await waitFor(() => expect(toggle).not.toBeChecked());
+
+		await user.click(toggle);
+
+		expect(await screen.findByText("Could not save the confirm before quitting preference.")).toHaveAttribute("role", "alert");
 		expect(toggle).not.toBeChecked();
 	});
 

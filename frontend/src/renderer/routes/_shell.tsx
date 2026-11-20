@@ -31,6 +31,7 @@ import { ShareLinkHost } from "../components/OpenShareLinkDialog";
 import { SharedArtifactLinkHost } from "../components/SharedArtifactLinkHost";
 import { KeyboardShortcutsDialog } from "../components/KeyboardShortcutsDialog";
 import { QuitConfirmDialog } from "../components/QuitConfirmDialog";
+import type { QuitConfirmChoice, QuitKeepRunningMode } from "../../shared/shortcuts";
 import { PageTopbar } from "../components/PageTopbar";
 import { SessionTopbarProvider } from "../components/SessionTopbarPortal";
 import { OrchestratorReplacementDialog } from "../components/OrchestratorReplacementDialog";
@@ -1355,20 +1356,21 @@ const replacementErrorCount = Object.keys(orchestratorReplacementErrors).length;
 	// The command palette runs the help shortcut through the app shortcut bus.
 	useAppShortcut("keyboard-shortcuts", () => setIsKeyboardShortcutsOpen((open) => !open));
 
-	// macOS ⌘Q asks before quitting; the main process quits once confirmed.
+	// Quitting asks first (see main/quit-confirm.ts); the main process carries
+	// out the choice. A repeated request re-opens the same dialog, never a second.
 	const [isQuitConfirmOpen, setIsQuitConfirmOpen] = useState(false);
-	const [quitKeepsRunning, setQuitKeepsRunning] = useState(false);
+	const [quitKeepRunning, setQuitKeepRunning] = useState<QuitKeepRunningMode | null>(null);
 	useEffect(
 		() =>
-			aoBridge.app.onQuitConfirmRequest(({ keepsRunning }) => {
-				setQuitKeepsRunning(keepsRunning);
+			aoBridge.app.onQuitConfirmRequest(({ keepRunning }) => {
+				setQuitKeepRunning(keepRunning);
 				setIsQuitConfirmOpen(true);
 			}),
 		[],
 	);
-	const resolveQuitConfirm = useCallback((confirmed: boolean) => {
+	const resolveQuitConfirm = useCallback((choice: QuitConfirmChoice) => {
 		setIsQuitConfirmOpen(false);
-		aoBridge.app.resolveQuitConfirm(confirmed);
+		aoBridge.app.resolveQuitConfirm(choice);
 	}, []);
 
 	// A folder was dropped on the app's taskbar icon/shortcut (main process,
@@ -1564,10 +1566,10 @@ const replacementErrorCount = Object.keys(orchestratorReplacementErrors).length;
 	// Rendering the sidebar with an empty query while the home outlet shows its
 	// loader creates a visible two-stage launch and can make the home page flash
 	// before the project list arrives.
-	// ⌘Q can arrive at any time, including during startup or a daemon
+	// A quit can arrive at any time, including during startup or a daemon
 	// reconnect, so the quit confirm renders outside the readiness gate.
 	const quitConfirmDialog = (
-		<QuitConfirmDialog open={isQuitConfirmOpen} keepsRunning={quitKeepsRunning} onResolve={resolveQuitConfirm} />
+		<QuitConfirmDialog open={isQuitConfirmOpen} keepRunning={quitKeepRunning} onResolve={resolveQuitConfirm} />
 	);
 	if (isStartupLoading) {
 		return (

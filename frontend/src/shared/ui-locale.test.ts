@@ -40,6 +40,7 @@ describe("shared UI locale schema", () => {
 			locale: "en",
 			soundNotificationsEnabled: true,
 			terminalShell: { kind: "auto" },
+			confirmBeforeQuit: true,
 		});
 		expect(coerceUiSettings({ locale: "en", soundNotificationsEnabled: false })).toEqual({
 			...DEFAULT_UI_SETTINGS,
@@ -59,6 +60,13 @@ describe("shared UI locale schema", () => {
 		expect(coerceUiSettings({ locale: "en", soundNotificationsEnabled: null })).toEqual({
 			...DEFAULT_UI_SETTINGS,
 		});
+	});
+
+	it("defaults confirmBeforeQuit to true and keeps only a persisted boolean", () => {
+		expect(coerceUiSettings({ confirmBeforeQuit: false })).toEqual({ ...DEFAULT_UI_SETTINGS, confirmBeforeQuit: false });
+		expect(coerceUiSettings({ confirmBeforeQuit: true })).toEqual(DEFAULT_UI_SETTINGS);
+		expect(coerceUiSettings({ confirmBeforeQuit: "false" })).toEqual(DEFAULT_UI_SETTINGS);
+		expect(coerceUiSettings({ confirmBeforeQuit: null })).toEqual(DEFAULT_UI_SETTINGS);
 	});
 
 	it("accepts supported terminal shells and normalizes custom paths", () => {

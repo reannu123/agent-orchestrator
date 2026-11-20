@@ -91,6 +91,7 @@ function setup() {
 		DAEMON_RESTART_STOP_TIMEOUT_MS: 5000, appendDaemonOutput: vi.fn(), slowDaemonStartupStatus: () => ({ state: "starting" }),
 		planDaemonAutoRestart, daemonExitWasUngraceful, disposeBrowserRuntimeLink: vi.fn(), captureSideChatState: async () => undefined,
 		desktopQuit: { handleBeforeQuit: () => false }, chatDraftRisks: [], browserCleanupComplete: true,
+		quitConfirm: { reset: vi.fn() }, appQuitInProgress: false,
 		disposeBrowserStreamLink: vi.fn(), trayLifecycle: { dispose: vi.fn() },
 		agentQuitCleanupComplete: false, agentQuitCleanupPromise: null, shutdownDaemonForDesktopQuit: async () => undefined,
 	});

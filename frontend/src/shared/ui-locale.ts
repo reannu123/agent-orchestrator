@@ -24,6 +24,8 @@ export interface UiSettings {
 	soundNotificationsEnabled: boolean;
 	/** Shell used for newly opened standalone terminal panes. */
 	terminalShell: TerminalShellPreference;
+	/** Whether closing or quitting the desktop app asks what to do with running agents first. */
+	confirmBeforeQuit: boolean;
 }
 
 export const DEFAULT_TERMINAL_SHELL: TerminalShellPreference = { kind: "auto" };
@@ -32,6 +34,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
 	locale: DEFAULT_LOCALE,
 	soundNotificationsEnabled: true,
 	terminalShell: DEFAULT_TERMINAL_SHELL,
+	confirmBeforeQuit: true,
 };
 
 /** Normalize an unknown value to a supported UI locale. */
@@ -66,5 +69,7 @@ export function coerceUiSettings(raw: unknown): UiSettings {
 		locale: coerceLocale(record.locale),
 		soundNotificationsEnabled,
 		terminalShell: coerceTerminalShell(record.terminalShell),
+		confirmBeforeQuit:
+			typeof record.confirmBeforeQuit === "boolean" ? record.confirmBeforeQuit : DEFAULT_UI_SETTINGS.confirmBeforeQuit,
 	};
 }

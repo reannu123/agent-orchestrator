@@ -1,7 +1,7 @@
 import type { TriageResult } from "./main/triage-launch";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { installRendererErrorHandlers } from "./shared/renderer-error-handlers";
-import { APP_MENU_ACTION_CHANNEL, SET_APP_MENU_AVAILABILITY_CHANNEL, type AppMenuActionId, type AppMenuAvailability, APP_SHORTCUT_CHANNEL, CLOSE_SHELL_TERMINAL_SHORTCUT_CHANNEL, KEYBOARD_SHORTCUTS_HELP_CHANNEL, NEXT_SESSION_SHORTCUT_CHANNEL, NEXT_TAB_SHORTCUT_CHANNEL, NEW_SESSION_SHORTCUT_CHANNEL, NEW_SHELL_TERMINAL_SHORTCUT_CHANNEL, OPEN_SETTINGS_SHORTCUT_CHANNEL, PREVIOUS_SESSION_SHORTCUT_CHANNEL, PREVIOUS_TAB_SHORTCUT_CHANNEL, QUIT_CONFIRM_REQUEST_CHANNEL, QUIT_CONFIRM_RESULT_CHANNEL, SET_CLOSE_SHELL_TERMINAL_SHORTCUT_ENABLED_CHANNEL, SET_TERMINAL_FOCUSED_CHANNEL, TERMINAL_FONT_SIZE_SHORTCUT_CHANNEL, SET_ARTIFACT_ZOOM_ENGAGED_CHANNEL, ARTIFACT_ZOOM_SHORTCUT_CHANNEL, type ArtifactZoomAction, type AppShortcutEvent, type KeybindingOverrides, type QuitConfirmRequest } from "./shared/shortcuts";
+import { APP_MENU_ACTION_CHANNEL, SET_APP_MENU_AVAILABILITY_CHANNEL, type AppMenuActionId, type AppMenuAvailability, APP_SHORTCUT_CHANNEL, CLOSE_SHELL_TERMINAL_SHORTCUT_CHANNEL, KEYBOARD_SHORTCUTS_HELP_CHANNEL, NEXT_SESSION_SHORTCUT_CHANNEL, NEXT_TAB_SHORTCUT_CHANNEL, NEW_SESSION_SHORTCUT_CHANNEL, NEW_SHELL_TERMINAL_SHORTCUT_CHANNEL, OPEN_SETTINGS_SHORTCUT_CHANNEL, PREVIOUS_SESSION_SHORTCUT_CHANNEL, PREVIOUS_TAB_SHORTCUT_CHANNEL, QUIT_CONFIRM_REQUEST_CHANNEL, QUIT_CONFIRM_RESULT_CHANNEL, QUIT_CONFIRM_READY_CHANNEL, coerceQuitConfirmRequest, type QuitConfirmChoice, SET_CLOSE_SHELL_TERMINAL_SHORTCUT_ENABLED_CHANNEL, SET_TERMINAL_FOCUSED_CHANNEL, TERMINAL_FONT_SIZE_SHORTCUT_CHANNEL, SET_ARTIFACT_ZOOM_ENGAGED_CHANNEL, ARTIFACT_ZOOM_SHORTCUT_CHANNEL, type ArtifactZoomAction, type AppShortcutEvent, type KeybindingOverrides, type QuitConfirmRequest } from "./shared/shortcuts";
 import { SCROLL_PHASE_CHANNEL, type ScrollPhase } from "./shared/scroll-phase";
 import { SIDE_CLOSE_PROTOCOL_VERSION, type SideCloseRequest, type SideCloseState } from "./shared/side-close";
 import {
@@ -355,16 +355,19 @@ const api = {
 				ipcRenderer.off(KEYBOARD_SHORTCUTS_HELP_CHANNEL, wrapped);
 			};
 		},
-		// ⌘Q on macOS: show the quit confirm, then answer with resolveQuitConfirm.
+		// Quitting (⌘Q, the menu, the tray, or closing the window on Windows/Linux):
+		// show the quit confirm, then answer with resolveQuitConfirm.
 		onQuitConfirmRequest: (listener: (request: QuitConfirmRequest) => void) => {
-			const wrapped = (_event: Electron.IpcRendererEvent, request?: Partial<QuitConfirmRequest>) =>
-				listener({ keepsRunning: request?.keepsRunning === true });
+			const wrapped = (_event: Electron.IpcRendererEvent, request?: unknown) =>
+				listener(coerceQuitConfirmRequest(request));
 			ipcRenderer.on(QUIT_CONFIRM_REQUEST_CHANNEL, wrapped);
+			// Tells main a dialog can now be shown in this shell.
+			ipcRenderer.send(QUIT_CONFIRM_READY_CHANNEL);
 			return () => {
 				ipcRenderer.off(QUIT_CONFIRM_REQUEST_CHANNEL, wrapped);
 			};
 		},
-		resolveQuitConfirm: (confirmed: boolean) => ipcRenderer.send(QUIT_CONFIRM_RESULT_CHANNEL, confirmed),
+		resolveQuitConfirm: (choice: QuitConfirmChoice) => ipcRenderer.send(QUIT_CONFIRM_RESULT_CHANNEL, choice),
 		// Fired by the main process when ⌘T / Ctrl+T is pressed in any web contents,
 		// including while focus is inside a terminal pane.
 		onNewShellTerminalShortcut: (listener: () => void) => {
