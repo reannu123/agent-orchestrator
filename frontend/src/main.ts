@@ -519,7 +519,7 @@ const quitConfirm = createQuitConfirmController({
 	isBypassed: () => appQuitInProgress || osSessionEnding || isUpdateRestartRequested() || browserQuitRequested,
 	canConfirm: () => {
 		const shell = getShellWebContents();
-		return Boolean(mainWindow?.isVisible() && !mainWindow.isMinimized() && shell && !shell.isDestroyed());
+		return Boolean(quitConfirmShellReady && mainWindow?.isVisible() && !mainWindow.isMinimized() && shell && !shell.isDestroyed());
 	},
 	canConfirmWindowClose: () => {
 		const shell = getShellWebContents();
