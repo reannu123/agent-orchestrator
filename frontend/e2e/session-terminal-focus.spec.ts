@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installFakeAgent } from "./support/fake-bridge";
 import { installFakeTerminalMux } from "./support/fake-terminal-mux";
+import { sidebarSessionButton } from "./support/sidebar-session";
 
 // A worker terminal used to be auto-focused only during a handoff, so opening a
 // TUI session or switching between two of them left focus on the sidebar button
@@ -25,7 +26,7 @@ function caretIsInTheVisibleTerminal(page: Page) {
 }
 
 async function openSession(page: Page, title: string) {
-	await page.getByRole("button", { name: `Open ${title}`, exact: true }).click();
+	await sidebarSessionButton(page, title).click();
 	await expect(visibleTerminal(page)).toHaveCount(1);
 }
 

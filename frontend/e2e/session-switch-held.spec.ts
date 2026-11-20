@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installFakeAgent } from "./support/fake-bridge";
+import { sidebarSessionButton } from "./support/sidebar-session";
 
 // A session switch renders the destination in the background while the
 // previous session stays on screen, inert, until the destination commits.
@@ -226,7 +227,7 @@ test("renderer: streaming replies keep updating through rapid session switches @
 			const clicked = Date.now();
 			const firstRequest = harness.requests.length;
 			const timeline = await recordSwitch(page);
-			await page.getByRole("button", { name: `Open ${session.title}`, exact: true }).click();
+			await sidebarSessionButton(page, session.title).click();
 			await expectShowing(page, session);
 			const frames = await timeline();
 			// A streaming session on screen must not stall the switch: every
@@ -269,8 +270,10 @@ for (const platform of PLATFORMS) {
 		await throttle(page, 6);
 
 		// ⌘/Ctrl+1–9 opens the nth session in sidebar order; aim at one that is not this one.
-		const order = await page.getByRole("button", { name: /^Open Held / }).evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
-		const target = order.findIndex((label) => label !== `Open ${sessions[0].title}`);
+		const titles = await page.getByRole("button", { name: /^Open Held / }).evaluateAll((buttons) =>
+			buttons.map((button) => button.querySelector("[data-session-name]")?.textContent),
+		);
+		const target = titles.findIndex((title) => title !== sessions[0].title);
 		expect(target).toBeGreaterThanOrEqual(0);
 		await page.keyboard.press(`${platform.jump}+${target + 1}`);
 		// Straight away, while the destination may still be rendering.
@@ -279,7 +282,7 @@ for (const platform of PLATFORMS) {
 		await expect(page.locator("#session-workspace")).not.toHaveAttribute("inert");
 		await throttle(page, 1);
 
-		await page.getByRole("button", { name: `Open ${sessions[0].title}`, exact: true }).click();
+		await sidebarSessionButton(page, sessions[0].title).click();
 		await expectShowing(page, sessions[0]);
 		await expect(composer).toHaveText("kept");
 		expect(harness.drafts.filter((draft) => draft.sessionId === sessions[0].id && draft.text.includes("zz"))).toEqual([]);
@@ -292,7 +295,7 @@ test("renderer: a quick trip through the board never shows the earlier session a
 	const stop = await recordShown(page);
 
 	await page.goto("/#/projects/fake-proj");
-	await page.getByRole("button", { name: `Open ${sessions[2].title}`, exact: true }).click();
+	await sidebarSessionButton(page, sessions[2].title).click();
 	await expectShowing(page, sessions[2]);
 
 	const shown = await stop();

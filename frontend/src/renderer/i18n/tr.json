@@ -2595,6 +2595,8 @@
 	"shell.couldNotRemoveProjectNamed": "{{name}} kaldırılamadı",
 	"shell.removeProjectRetry": "Yeniden dene",
 	"shell.renameSession": "{{title}} öğesini yeniden adlandır",
+	"shell.sessionRole.worker": "Çalışan",
+	"shell.sessionRole.orchestrator": "Orchestrator",
 	"shell.rename": "Yeniden adlandır",
 	"shell.openDashboard": "Kontrol panelini aç",
 	"shell.copied": "Panoya kopyalandı",

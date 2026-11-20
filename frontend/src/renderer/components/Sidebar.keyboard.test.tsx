@@ -92,7 +92,7 @@ describe("Sidebar session rows with the real DndContext", () => {
 	it("starts a keyboard drag on Space and cancels on Escape without opening the session", async () => {
 		const user = userEvent.setup();
 		renderSidebar();
-		const row = screen.getByLabelText("Open fix login");
+		const row = screen.getByLabelText("Open fix login · Worker · Claude Code");
 		row.focus();
 		await user.keyboard(" ");
 		await waitFor(() => expect(screen.getAllByRole("status").some((el) => /fix login|proj-1-1/.test(el.textContent ?? ""))).toBe(true));
@@ -104,12 +104,28 @@ describe("Sidebar session rows with the real DndContext", () => {
 	it("leaves Enter to open the row and F2 to rename it", async () => {
 		const user = userEvent.setup();
 		renderSidebar();
-		const row = screen.getByLabelText("Open fix login");
+		const row = screen.getByLabelText("Open fix login · Worker · Claude Code");
 		row.focus();
 		await user.keyboard("{Enter}");
 		expect(navigateMock).toHaveBeenCalledTimes(1);
 		expect(screen.getAllByRole("status").every((el) => !/picked up|cancelled|moved/i.test(el.textContent ?? ""))).toBe(true);
 		await user.keyboard("{F2}");
 		expect(screen.getByLabelText("Rename fix login")).toHaveFocus();
+	});
+
+	it("opens the inline editor on F2 when the Rename action has keyboard focus", async () => {
+		const user = userEvent.setup();
+		renderSidebar();
+		const row = screen.getByRole("button", { name: "Open fix login · Worker · Claude Code" });
+		const rename = screen.getByRole("button", { name: "Rename fix login" });
+		row.focus();
+		await user.tab();
+		expect(rename).toHaveFocus();
+		expect(rename).toHaveAttribute("aria-keyshortcuts", "F2");
+
+		await user.keyboard("{F2}");
+
+		expect(screen.getByRole("textbox", { name: "Rename fix login" })).toHaveFocus();
+		expect(navigateMock).not.toHaveBeenCalled();
 	});
 });

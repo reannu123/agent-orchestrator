@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { installSessionSwitchFixture, measureSessionSwitch } from "./performance/session-switch";
+import { sidebarSessionButton } from "./support/sidebar-session";
 
 // AO_PERF_APP=1 AO_PERF_PRODUCTION=1 AO_PERF_BENCH=1 AO_E2E_PORT=5497 \
 //   npm run test:e2e -- session-switch-performance --repeat-each=5 --workers=1
@@ -15,7 +16,7 @@ test("production first opens and session revisits", async ({ page, browser }, te
 	await installSessionSwitchFixture(page);
 	await page.goto("/#/projects/fake-proj");
 	await page.getByRole("button", { name: "Show 4 more agents", exact: true }).click();
-	await page.getByRole("button", { name: "Open Bench 0", exact: true }).waitFor();
+	await sidebarSessionButton(page, "Bench 0").waitFor();
 	await page.mouse.move(0, 0);
 	// Let the existing idle chunk preload run before the first session open.
 	await page.waitForTimeout(2500);
