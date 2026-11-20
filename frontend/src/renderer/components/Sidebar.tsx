@@ -24,6 +24,7 @@ import {
 	Copy,
 	GitMerge,
 	GitPullRequest,
+	Hammer,
 	LoaderCircle,
 	LayoutGrid,
 	Package,
@@ -32,6 +33,7 @@ import {
 	LogOut,
 	MoreVertical,
 	PanelLeft,
+	Pencil,
 	Pin,
 	PinOff,
 	Plus,
@@ -2755,10 +2757,11 @@ type SessionReorder = Pick<SortableRow, "isDragging" | "listeners" | "setActivat
 };
 
 // Who a row's agent is, beside its name: the harness it runs now (read from the
-// live session, so an agent switch updates it) and, for an orchestrator, its
-// role. A worker is the sidebar's default, so it carries no role mark. Both
-// marks sit grey at rest and take their colour on hover or when open, so the
-// sidebar's colour stays with working and with what needs the user.
+// live session, so an agent switch updates it) and its role: a hammer for a
+// worker, the org chart (the project row's orchestrator button) for an
+// orchestrator. Both marks sit grey at rest and take their colour on hover or
+// when open, so the sidebar's colour stays with working and with what needs
+// the user.
 function identityMarkClass(active: boolean) {
 	return cn(
 		"inline-flex size-3 shrink-0 items-center justify-center",
@@ -2772,18 +2775,17 @@ function sessionRoleLabel(session: WorkspaceSession, t: TFunction): string {
 
 const SessionIdentityMarks = memo(function SessionIdentityMarks({ session, active }: { session: WorkspaceSession; active: boolean }) {
 	const { t } = useTranslation();
+	const orchestrator = isOrchestratorSession(session);
 	return (
 		<span aria-hidden="true" className="flex shrink-0 items-center gap-1" data-session-identity="">
-			{isOrchestratorSession(session) ? (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<span className={cn(identityMarkClass(active), "text-muted-foreground")} data-session-role="orchestrator">
-							<OrchestratorIcon className="size-3" />
-						</span>
-					</TooltipTrigger>
-					<TooltipContent>{t("shell.sessionRole.orchestrator")}</TooltipContent>
-				</Tooltip>
-			) : null}
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<span className={cn(identityMarkClass(active), "text-muted-foreground")} data-session-role={orchestrator ? "orchestrator" : "worker"}>
+						{orchestrator ? <OrchestratorIcon className="size-3" /> : <Hammer className="size-3" />}
+					</span>
+				</TooltipTrigger>
+				<TooltipContent>{sessionRoleLabel(session, t)}</TooltipContent>
+			</Tooltip>
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<span className={identityMarkClass(active)} data-session-harness={session.provider}>
@@ -2980,8 +2982,12 @@ const SessionRow = memo(function SessionRow({
 							className={cn(
 								"flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg py-0 pl-1.5 text-left text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring",
 								(session.lastInteractionAt ?? session.lastUserMessageAt) ? "pr-[36px]" : "pr-2.5",
+								// Rename, pin and archive need the three-action width; a shared row
+								// has none of them.
 								!reorder?.isDragging &&
-									"group-hover/session-row:pr-sidebar-project-actions focus-visible-in-session-row:pr-sidebar-project-actions",
+									(renamable
+										? "group-hover/session-row:pr-sidebar-project-actions-pinned focus-visible-in-session-row:pr-sidebar-project-actions-pinned"
+										: "group-hover/session-row:pr-sidebar-project-actions focus-visible-in-session-row:pr-sidebar-project-actions"),
 								reorder && "cursor-grab active:cursor-grabbing",
 								reorder?.isDragging && "!cursor-grabbing",
 							)}
@@ -3057,6 +3063,7 @@ const SessionRow = memo(function SessionRow({
 						isDragging={Boolean(reorder?.isDragging)}
 						onArchiveOpenChange={setArchiveOpen}
 						onKilled={onKilled}
+						onRename={renamable ? beginRename : undefined}
 						session={session}
 					/>
 				</div>
@@ -3080,7 +3087,7 @@ const SessionRow = memo(function SessionRow({
 			</HoverCard>
 			<ContextMenuContent className="min-w-44">
 				{/* Archiving is the owner workspace's; a guest's archive would always be refused. */}
-				<SessionContextMenuItems onArchive={session.cloud?.shared ? undefined : () => setArchiveOpen(true)} onRename={beginRename} session={session} />
+				<SessionContextMenuItems onArchive={session.cloud?.shared ? undefined : () => setArchiveOpen(true)} onRename={beginRename} renameShortcut="F2" session={session} />
 			</ContextMenuContent>
 		</ContextMenu>
 	);
@@ -3109,12 +3116,15 @@ const SessionActions = memo(function SessionActions({
 	archiveOpen,
 	onArchiveOpenChange,
 	onKilled,
+	onRename,
 }: {
 	session: WorkspaceSession;
 	isDragging: boolean;
 	archiveOpen: boolean;
 	onArchiveOpenChange: (open: boolean) => void;
 	onKilled?: (session: WorkspaceSession) => void;
+	/** Starts the row's inline rename; absent where the session is not ours to name. */
+	onRename?: () => void;
 }) {
 	const { t } = useTranslation();
 	const { mutate: pinSession } = usePinSession();
@@ -3157,6 +3167,29 @@ const SessionActions = memo(function SessionActions({
 				)}
 				data-session-action-buttons=""
 			>
+				{/* The visible way into the same inline rename as F2, double-click and the menu. */}
+				{onRename ? (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								size="icon-xs"
+								variant="quiet"
+								aria-keyshortcuts="F2"
+								aria-label={t("shell.renameSession", { title: session.title })}
+								className={SESSION_ACTION_CLASS}
+								data-session-rename=""
+								onClick={(event) => {
+									event.stopPropagation();
+									onRename();
+								}}
+								type="button"
+							>
+								<Pencil aria-hidden="true" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent side="top">{t("shell.rename")}</TooltipContent>
+					</Tooltip>
+				) : null}
 				{session.cloud?.shared ? null : <Button
 							size="icon-xs"
 							variant="quiet"

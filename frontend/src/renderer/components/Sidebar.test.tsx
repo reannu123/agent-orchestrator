@@ -1559,8 +1559,8 @@ describe("Sidebar", () => {
 		expect(disclosure).toHaveProperty("tabIndex", -1);
 		expect(screen.getByLabelText("Spawn Project One orchestrator")).toHaveProperty("tabIndex", 0);
 		expect(screen.getByLabelText("Project actions for Project One")).toHaveProperty("tabIndex", 0);
+		expect(screen.getByRole("button", { name: "Rename fix login" })).toHaveProperty("tabIndex", 0);
 		expect(screen.getByLabelText("Pin session")).toHaveProperty("tabIndex", 0);
-		expect(screen.queryByRole("button", { name: "Rename fix login" })).not.toBeInTheDocument();
 		expect(screen.getByLabelText("Archive session")).toHaveProperty("tabIndex", 0);
 	});
 
@@ -1577,9 +1577,10 @@ describe("Sidebar", () => {
 		const time = actions?.querySelector("time");
 
 		expect(openSession).toHaveClass("pr-[36px]");
+		// Rename, pin and archive: the three-action width.
 		expect(openSession).toHaveClass(
-			"group-hover/session-row:pr-sidebar-project-actions",
-			"focus-visible-in-session-row:pr-sidebar-project-actions",
+			"group-hover/session-row:pr-sidebar-project-actions-pinned",
+			"focus-visible-in-session-row:pr-sidebar-project-actions-pinned",
 		);
 		expect(label).toHaveClass("min-w-0", "flex-1", "truncate");
 		expect(actions).toHaveAttribute("data-session-actions");
@@ -1620,6 +1621,8 @@ describe("Sidebar", () => {
 		openSession.focus();
 		await user.tab();
 
+		expect(screen.getByRole("button", { name: "Rename fix login" })).toHaveFocus();
+		await user.tab();
 		expect(screen.getByLabelText("Pin session")).toHaveFocus();
 		expect(row).toContainElement(openSession);
 		expect(row).toContainElement(status as HTMLElement);
@@ -2846,12 +2849,12 @@ describe("Sidebar", () => {
 		expect(within(menu as HTMLElement).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
 			"Open in",
 			"Copy path",
-			"Rename",
+			"RenameF2",
 			"Pin session",
 			"Fork session",
 			"Archive session",
 		]);
-		expect(renameItem).toHaveTextContent(/^Rename$/);
+		expect(renameItem).toHaveTextContent(/^RenameF2$/);
 		expect(renameItem.querySelector("svg")).toBeInTheDocument();
 		await user.click(renameItem);
 
@@ -2959,13 +2962,15 @@ describe("Sidebar", () => {
 		const harnessMark = (row: HTMLElement) => row.querySelector<HTMLElement>("[data-session-identity] [data-session-harness]");
 		const roleMark = (row: HTMLElement) => row.querySelector<HTMLElement>("[data-session-identity] [data-session-role]");
 
-		it("marks a worker row with its harness and no role mark, and names both in its label", () => {
+		it("marks a worker row with its role and harness, and names both in its label", async () => {
+			const user = userEvent.setup();
 			renderSidebar({ workspaces: [{ ...workspace, sessions: [session] }] });
 			const row = screen.getByRole("button", { name: "Open fix login · Worker · Claude Code" });
 			expect(harnessMark(row)).toHaveAttribute("data-session-harness", "claude-code");
 			expect(harnessMark(row)?.querySelector("img")).toBeInTheDocument();
-			// A worker is the default: only an orchestrator carries a role mark.
-			expect(roleMark(row)).toBeNull();
+			expect(roleMark(row)).toHaveAttribute("data-session-role", "worker");
+			await user.hover(roleMark(row)!);
+			expect(await screen.findByRole("tooltip")).toHaveTextContent("Worker");
 			// The marks are decorative; the label already names them.
 			expect(row.querySelector("[data-session-identity]")).toHaveAttribute("aria-hidden", "true");
 		});
@@ -2993,7 +2998,7 @@ describe("Sidebar", () => {
 			const row = screen.getByRole("button", { name: "Open Shared orchestrator · Orchestrator · Codex" });
 			expect(roleMark(row)).toHaveAttribute("data-session-role", "orchestrator");
 			expect(harnessMark(row)).toHaveAttribute("data-session-harness", "codex");
-			expect(roleMark(screen.getByRole("button", { name: "Open fix login · Worker · Claude Code" }))).toBeNull();
+			expect(roleMark(screen.getByRole("button", { name: "Open fix login · Worker · Claude Code" }))).toHaveAttribute("data-session-role", "worker");
 		});
 
 		it("names the harness and the role in tooltips", async () => {
@@ -3024,6 +3029,40 @@ describe("Sidebar", () => {
 			// The age keeps its own reserved slot at the row's right edge.
 			expect(row).toHaveClass("pr-[36px]");
 			expect(row.closest("[data-session-row]")?.querySelector("[data-session-message-age]")).toHaveClass("absolute");
+		});
+
+		it("shows a visible Rename action that opens the same inline editor", async () => {
+			const user = userEvent.setup();
+			renderSidebar({ workspaces: [{ ...workspace, sessions: [session] }] });
+			const rename = screen.getByRole("button", { name: "Rename fix login" });
+			expect(rename).toHaveAttribute("aria-keyshortcuts", "F2");
+			expect(rename.closest("[data-session-action-buttons]")).toBeInTheDocument();
+
+			await user.hover(rename);
+			expect(await screen.findByRole("tooltip")).toHaveTextContent("Rename");
+			await user.click(rename);
+			const input = screen.getByRole("textbox", { name: "Rename fix login" });
+			expect(input).toHaveFocus();
+			await user.clear(input);
+			await user.type(input, "polish login{Enter}");
+			await waitFor(() => expect(renameSessionMock).toHaveBeenCalledWith("proj-1-1", "polish login"));
+			expect(navigateMock).not.toHaveBeenCalled();
+		});
+
+		it("shows F2 beside Rename in the row's context menu", async () => {
+			renderSidebar({ workspaces: [{ ...workspace, sessions: [session] }] });
+			fireEvent.contextMenu(screen.getByRole("button", { name: "Open fix login · Worker · Claude Code" }));
+			const item = await screen.findByRole("menuitem", { name: "Rename fix login" });
+			expect(item).toHaveTextContent("F2");
+		});
+
+		it("offers no Rename action on a session shared from another organization", () => {
+			const sharedSession: WorkspaceSession = { ...session, cloud: { orgId: "org-elsewhere", shared: true } };
+			const shared: WorkspaceSummary = { ...workspace, kind: "cloud", cloudOrgId: "org-elsewhere", shared: {}, sessions: [sharedSession] };
+			renderSidebar({ workspaces: [shared], expandedProjectIds: ["proj-1"] });
+			expect(screen.queryByRole("button", { name: "Rename fix login" })).toBeNull();
+			const row = screen.getByRole("button", { name: /^Open fix login · Worker · Claude Code/ });
+			expect(row).toHaveClass("group-hover/session-row:pr-sidebar-project-actions");
 		});
 
 		it("offers Rename in the context menu and on F2 for an orchestrator row too", async () => {
